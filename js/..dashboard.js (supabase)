@@ -1,0 +1,233 @@
+/* js/dashboard.js - SUPABASE VERSION */
+
+// 1. IMPORT SUPABASE (CDN se)
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+// 2. YOUR SUPABASE CONFIG (Ye aapko Supabase Settings > API me milega)
+const supabaseUrl = 'https://sbwgualposhuimvdrcst.supabase.co'
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNid2d1YWxwb3NodWltdmRyY3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MTA0MzQsImV4cCI6MjA4Mzk4NjQzNH0.jtF7NyRe96RrFDan0TFemjPMz5uAfpDaSOJWcBiywpo' // Isko "anon" key kehte hain
+const supabase = createClient(supabaseUrl, supabaseKey)
+
+// State Variables
+const userRole = sessionStorage.getItem("userRole");
+const userName = sessionStorage.getItem("userName");
+const userID = sessionStorage.getItem("userID");
+let allUploads = [];
+
+/* --- INIT --- */
+window.onload = function() {
+    if (!sessionStorage.getItem("isLoggedIn")) {
+        window.location.href = "../../login.html";
+        return;
+    }
+
+    // Load Profile Info
+    const pName = document.getElementById('profileName');
+    const pID = document.getElementById('profileID');
+    if(pName) pName.innerText = userName;
+    if(pID) pID.innerText = (userRole === 'student' ? "Reg No: " : "ID: ") + userID;
+
+    // Start Fetching Data
+    fetchData();
+    setupSearchLogic();
+    setupCategoryListener();
+};
+
+/* --- LOGIC: FETCH DATA (Read from Database) --- */
+async function fetchData() {
+    // Firebase ki jagah Supabase ka select query
+    const { data, error } = await supabase
+        .from('uploads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching data:", error);
+        return;
+    }
+
+    allUploads = data; // Data store kar liya
+
+    // Clear old data
+    ['note','ebook','pyq','notice'].forEach(c => {
+        const el = document.getElementById(`mini_${c}s`);
+        if(el) el.innerHTML = '';
+    });
+
+    // Display Data
+    allUploads.forEach((item) => {
+        const miniContainer = document.getElementById(`mini_${item.category}s`);
+        if (miniContainer && miniContainer.children.length < 5) {
+            const div = document.createElement('div');
+            div.className = 'list_item';
+            // Formatting Date
+            const date = new Date(item.created_at).toLocaleDateString();
+            div.innerHTML = `<h4>${item.title}</h4>
+                             <span>By ${item.author} • ${date}</span>`;
+            miniContainer.appendChild(div);
+        }
+    });
+}
+
+/* --- LOGIC: UPLOAD (Add Data to Database) --- */
+window.openUploadModal = function() {
+    document.getElementById('uploadModal').classList.add('active');
+};
+
+document.getElementById('uploadForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    btn.innerText = "Uploading...";
+    btn.disabled = true;
+
+    const title = document.getElementById('upTitle').value;
+    const category = document.getElementById('upCategory').value;
+    const desc = document.getElementById('upDesc').value;
+    const file = document.getElementById('upFile').files[0];
+
+    try {
+        let publicURL = "";
+
+        // 1. Upload File to Supabase Storage (Agar file hai)
+        if (file) {
+            const fileName = `${Date.now()}_${file.name}`;
+            const { data, error } = await supabase.storage
+                .from('files') // Bucket name 'files' hona chahiye
+                .upload(fileName, file);
+
+            if (error) throw error;
+
+            // Get Public URL for the file
+            const urlData = supabase.storage.from('files').getPublicUrl(fileName);
+            publicURL = urlData.data.publicUrl;
+        } 
+        else if ((category === 'note' || category === 'ebook') && !file) {
+            throw new Error("File is required for Notes/E-books");
+        }
+
+        // 2. Insert Data into Table ('uploads')
+        const { error: dbError } = await supabase
+            .from('uploads')
+            .insert([
+                { 
+                    title: title, 
+                    category: category, 
+                    desc: desc, 
+                    file_url: publicURL, 
+                    author: userName 
+                    // created_at automatic add hoga
+                }
+            ]);
+
+        if (dbError) throw dbError;
+
+        alert("Upload Successful!");
+        window.closeModal();
+        e.target.reset();
+        fetchData(); // Refresh list immediately
+
+    } catch (error) {
+        console.error(error);
+        alert("Error: " + error.message);
+    }
+    btn.innerText = "Upload";
+    btn.disabled = false;
+});
+
+/* --- LOGIC: DELETE --- */
+window.deleteItem = async function(id, fileUrl) {
+    if (userRole !== 'admin' && userRole !== 'teacher') {
+        alert("Unauthorized action!");
+        return;
+    }
+    if(!confirm("Delete this item?")) return;
+    
+    try {
+        // 1. Delete from Database
+        const { error } = await supabase
+            .from('uploads')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        // 2. Delete File from Storage (Optional, thoda advanced logic chahiye URL se path nikalne ke liye)
+        // Abhi ke liye sirf database entry delete kar rahe hain.
+        
+        alert("Deleted successfully.");
+        fetchData(); // Refresh UI
+        window.closeModal(); 
+    } catch (error) {
+        alert("Error: " + error.message);
+    }
+};
+
+/* --- HELPER FUNCTIONS --- */
+window.openModal = function(category) {
+    const modal = document.getElementById('viewModal');
+    document.getElementById('modalTitle').innerText = category.toUpperCase() + " - List";
+    const tableBody = document.getElementById('modalTableBody');
+    modal.classList.add('active');
+    tableBody.innerHTML = "";
+
+    const filtered = allUploads.filter(item => item.category === category);
+    filtered.forEach(item => {
+        const row = document.createElement('tr');
+        let actionHTML = "";
+        
+        if(item.file_url) actionHTML += `<a href="${item.file_url}" target="_blank" class="action_btn_dl">Download</a>`;
+        else actionHTML += `<span style="color:#888; font-size:0.8rem;">Text Only</span>`;
+
+        if (userRole === 'admin' || (userRole === 'teacher' && item.author === userName)) {
+            // Note: Supabase ID usually number, ensure consistency
+            actionHTML += `<button class="delete_btn" onclick="deleteItem(${item.id}, '${item.file_url}')"><i class="fa-solid fa-trash"></i></button>`;
+        }
+
+        row.innerHTML = `
+            <td><strong>${item.title}</strong><br><small>${item.desc || ""}</small></td>
+            <td>${item.author}</td>
+            <td>${new Date(item.created_at).toLocaleDateString()}</td>
+            <td>${actionHTML}</td>
+        `;
+        tableBody.appendChild(row);
+    });
+};
+
+window.closeModal = function() {
+    document.querySelectorAll('.modal_overlay').forEach(el => el.classList.remove('active'));
+};
+
+function setupSearchLogic() {
+    const searchInput = document.getElementById('universalSearch');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', function(e) {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.list_item').forEach(item => {
+                const text = item.innerText.toLowerCase();
+                item.style.display = text.includes(term) ? "block" : "none";
+            });
+        });
+    }
+}
+
+function setupCategoryListener() {
+    const catSelect = document.getElementById('upCategory');
+    if(catSelect) {
+        catSelect.addEventListener('change', function() {
+            const fileInput = document.getElementById('upFile');
+            const val = this.value;
+            if(val === 'note' || val === 'ebook') {
+                fileInput.required = true;
+                fileInput.previousElementSibling.innerText = "File *Required";
+            } else {
+                fileInput.required = false;
+                fileInput.previousElementSibling.innerText = "File (Optional)";
+            }
+        });
+    }
+}
+
+window.handleLogout = function() {
+    sessionStorage.clear();
+    window.location.href = "../../index.html";
+};
