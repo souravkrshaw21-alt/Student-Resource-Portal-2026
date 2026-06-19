@@ -12,7 +12,7 @@ const userRole = sessionStorage.getItem("userRole");
 const userName = sessionStorage.getItem("userName");
 const userID = sessionStorage.getItem("userID");
 
-window.onload = function() {
+document.addEventListener("DOMContentLoaded", () => {
     if (!sessionStorage.getItem("isLoggedIn")) {
         const msg = document.getElementById('welcomeMsg');
         if(msg) msg.innerHTML = `<span style="color:#ffcccb">You are not logged in. Login to access library features.</span>`;
@@ -28,7 +28,7 @@ window.onload = function() {
     }
     fetchBooks();
     fetchLibraryNotices();
-};
+});
 
 /* --- 1. FETCH BOOKS --- */
 async function fetchBooks() {
