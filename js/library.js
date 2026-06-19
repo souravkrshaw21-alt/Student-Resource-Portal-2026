@@ -4,7 +4,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 // CONFIG
 const supabaseUrl = 'https://sbwgualposhuimvdrcst.supabase.co'
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNid2d1YWxwb3NodWltdmRyY3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MTA0MzQsImV4cCI6MjA4Mzk4NjQzNH0.jtF7NyRe96RrFDan0TFemjPMz5uAfpDaSOJWcBiywpo'
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNid2d1YWxwb3NodWltdmRyY3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MTA0MzQsImV4cCI6MjA4Mzk4NjQzNH0.jtF7NyRe96R[...]
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 // STATE
@@ -12,7 +12,7 @@ const userRole = sessionStorage.getItem("userRole");
 const userName = sessionStorage.getItem("userName");
 const userID = sessionStorage.getItem("userID");
 
-document.addEventListener("DOMContentLoaded", () => {
+window.onload = function() {
     if (!sessionStorage.getItem("isLoggedIn")) {
         const msg = document.getElementById('welcomeMsg');
         if(msg) msg.innerHTML = `<span style="color:#ffcccb">You are not logged in. Login to access library features.</span>`;
@@ -28,7 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     fetchBooks();
     fetchLibraryNotices();
-});
+};
 
 /* --- 1. FETCH BOOKS --- */
 async function fetchBooks() {
